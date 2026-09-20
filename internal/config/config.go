@@ -33,7 +33,7 @@ type HTTPConfig struct {
 	ShutdownTimeout time.Duration
 }
 
-func Load() (*Config, error) {
+func MustLoad() (*Config, error) {
 	values, err := godotenv.Read(".env")
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, errors.New("config: cannot read or parse .env")

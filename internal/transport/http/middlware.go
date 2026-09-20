@@ -19,9 +19,9 @@ func enableCORS(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
+func (h *Handler) loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		config.RLogger.Printf("Received %s request for %s from %s",
+		h.logger.Printf("Received %s request for %s from %s",
 			r.Method, r.URL.Path, r.RemoteAddr)
 		next(w, r)
 	}
