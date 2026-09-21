@@ -1,0 +1,209 @@
+openapi: 3.0.3
+
+info:
+  title: URL Shortener API
+  version: 1.0.0
+  description: |
+    API для создания сокращённых ссылок и получения исходных URL.
+    Каждому исходному URL соответствует ровно одна сокращённая ссылка.
+    Повторная отправка того же исходного URL возвращает существующую ссылку.
+    Исходные URL сравниваются как строки, без нормализации.
+    Код сокращённой ссылки уникален, чувствителен к регистру и состоит
+    ровно из 10 символов: A–Z, a–z, 0–9 и подчёркивания (_).
+
+servers:
+  - url: http://localhost:8081
+    description: Локальный сервер API
+
+tags:
+  - name: Links
+    description: Создание и получение ссылок
+
+paths:
+  /links:
+    post:
+      tags:
+        - Links
+      operationId: createShortLink
+      summary: Создать сокращённую ссылку
+      description: |
+        Сохраняет исходный URL и возвращает сокращённую ссылку.
+        Если URL уже сохранён, возвращает прежний код и ссылку.
+        Параллельные запросы с одинаковым URL должны получать одну и ту же ссылку.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateLinkRequest'
+      responses:
+        '201':
+          description: Новая сокращённая ссылка создана.
+          headers:
+            Location:
+              description: URL для получения исходного URL через GET.
+              schema:
+                type: string
+                format: uri
+                example: http://localhost:8081/Ab3_dE9xY0
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortLinkResponse'
+        '200':
+          description: Для исходного URL уже существует сокращённая ссылка.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShortLinkResponse'
+        '400':
+          description: |
+            Некорректный JSON, отсутствует обязательное поле original_url
+            либо его значение не является абсолютным HTTP/HTTPS URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: invalid_request
+                message: Поле original_url должно содержать абсолютный HTTP/HTTPS URL.
+        '415':
+          description: Тело запроса должно иметь Content-Type application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: unsupported_media_type
+                message: Ожидается Content-Type application/json.
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /{short_code}:
+    get:
+      tags:
+        - Links
+      operationId: getOriginalURL
+      summary: Получить исходный URL
+      description: |
+        Принимает код из сокращённой ссылки в пути запроса
+        и возвращает соответствующий исходный URL в JSON.
+      parameters:
+        - name: short_code
+          in: path
+          required: true
+          description: Уникальный код сокращённой ссылки, чувствительный к регистру.
+          schema:
+            $ref: '#/components/schemas/ShortCode'
+      responses:
+        '200':
+          description: Исходный URL найден.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OriginalURLResponse'
+        '400':
+          description: Код имеет неверную длину или содержит недопустимые символы.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: invalid_request
+                message: Код должен содержать ровно 10 символов из набора A-Z, a-z, 0-9, _.
+        '404':
+          description: Ссылка с корректным по формату кодом не найдена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: link_not_found
+                message: Сокращённая ссылка не найдена.
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    OriginalURL:
+      type: string
+      format: uri
+      minLength: 1
+      pattern: '^https?://'
+      description: Абсолютный URL со схемой http или https и непустым хостом.
+      example: https://example.com/articles/go-url-shortener?source=api
+
+    ShortCode:
+      type: string
+      minLength: 10
+      maxLength: 10
+      pattern: '^[A-Za-z0-9_]{10}$'
+      description: Код из 10 латинских букв, цифр или подчёркиваний.
+      example: Ab3_dE9xY0
+
+    CreateLinkRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - original_url
+      properties:
+        original_url:
+          $ref: '#/components/schemas/OriginalURL'
+
+    ShortLinkResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - short_code
+        - short_url
+      properties:
+        short_code:
+          $ref: '#/components/schemas/ShortCode'
+        short_url:
+          type: string
+          format: uri
+          description: |
+            Полный сокращённый URL вида {адрес сервиса}/{short_code}.
+            GET по этому адресу возвращает исходный URL в JSON.
+            Поле short_code совпадает с последним сегментом short_url.
+          example: http://localhost:8081/Ab3_dE9xY0
+
+    OriginalURLResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - original_url
+      properties:
+        original_url:
+          $ref: '#/components/schemas/OriginalURL'
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Машиночитаемый код ошибки.
+          enum:
+            - invalid_request
+            - unsupported_media_type
+            - link_not_found
+            - internal_error
+        message:
+          type: string
+          description: Описание ошибки без внутренних деталей реализации.
+          example: Некорректные параметры запроса.
+
+  responses:
+    InternalServerError:
+      description: Внутренняя ошибка сервиса.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: internal_error
+            message: Внутренняя ошибка сервиса.
