@@ -7,8 +7,8 @@ import (
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("POST /links", enableCORS(loggingMiddleware(h.CreateLink)))
-	mux.HandleFunc("GET /{short_code}", enableCORS(loggingMiddleware(h.GetOriginalURL)))
+	mux.HandleFunc("POST /links", enableCORS(h.loggingMiddleware(h.CreateLink)))
+	mux.HandleFunc("GET /{short_code}", enableCORS(h.loggingMiddleware(h.GetOriginalURL)))
 
 	return mux
 }

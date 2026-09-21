@@ -21,8 +21,14 @@ func enableCORS(next http.HandlerFunc) http.HandlerFunc {
 
 func (h *Handler) loggingMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h.logger.Printf("Received %s request for %s from %s",
-			r.Method, r.URL.Path, r.RemoteAddr)
+		if h.logger != nil {
+			h.logger.Info(
+				"HTTP request received",
+				"method", r.Method,
+				"path", r.URL.Path,
+				"remote_address", r.RemoteAddr,
+			)
+		}
 		next(w, r)
 	}
 }

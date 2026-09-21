@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/GaM1rka/url-shortener/internal/domain"
 	"github.com/GaM1rka/url-shortener/internal/service"
 )
 
@@ -75,6 +76,14 @@ func (h *Handler) CreateLink(w http.ResponseWriter, r *http.Request) {
 
 	link, created, err := h.service.Create(r.Context(), request.OriginalURL)
 	if err != nil {
+		if errors.Is(err, domain.ErrInvalidURL) {
+			writeJSON(w, http.StatusBadRequest, ErrorResponse{
+				Code:    "invalid_request",
+				Message: "Поле original_url должно содержать абсолютный HTTP/HTTPS URL.",
+			})
+			return
+		}
+
 		h.writeInternalError(w, err)
 		return
 	}
@@ -111,16 +120,25 @@ func (h *Handler) GetOriginalURL(w http.ResponseWriter, r *http.Request) {
 
 	link, err := h.service.GetByShort(r.Context(), shortCode)
 	if err != nil {
-		if isNotFoundError(err) {
+		switch {
+		case errors.Is(err, domain.ErrInvalidShortCode):
+			writeJSON(w, http.StatusBadRequest, ErrorResponse{
+				Code:    "invalid_request",
+				Message: "Код должен содержать ровно 10 символов из набора A-Z, a-z, 0-9, _.",
+			})
+			return
+
+		case errors.Is(err, domain.ErrNotFound):
 			writeJSON(w, http.StatusNotFound, ErrorResponse{
 				Code:    "link_not_found",
 				Message: "Сокращённая ссылка не найдена.",
 			})
 			return
-		}
 
-		h.writeInternalError(w, err)
-		return
+		default:
+			h.writeInternalError(w, err)
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusOK, OriginalURLResponse{
@@ -160,45 +178,6 @@ func isValidShortCode(value string) bool {
 	}
 
 	return true
-}
-
-func isNotFoundError(err error) bool {
-	type notFoundMarker interface {
-		NotFound() bool
-	}
-	type errorCoder interface {
-		Code() string
-	}
-	type statusCoder interface {
-		StatusCode() int
-	}
-
-	var marker notFoundMarker
-	if errors.As(err, &marker) && marker.NotFound() {
-		return true
-	}
-
-	var coder errorCoder
-	if errors.As(err, &coder) {
-		code := coder.Code()
-		if code == "not_found" || code == "link_not_found" {
-			return true
-		}
-	}
-
-	var status statusCoder
-	if errors.As(err, &status) && status.StatusCode() == http.StatusNotFound {
-		return true
-	}
-
-	for current := err; current != nil; current = errors.Unwrap(current) {
-		switch strings.ToLower(strings.TrimSpace(current.Error())) {
-		case "not found", "link not found", "link_not_found":
-			return true
-		}
-	}
-
-	return false
 }
 
 func writeInvalidJSON(w http.ResponseWriter) {
