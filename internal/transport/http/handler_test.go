@@ -369,6 +369,30 @@ func TestHandlerWithoutServiceReturnsInternalError(t *testing.T) {
 	}
 }
 
+func TestHandlerCORSPreflight(t *testing.T) {
+	t.Parallel()
+
+	handler := newTestHandler(memory.New(), fixedGenerator{code: testCode})
+	response := performRequest(
+		t,
+		handler.Routes(),
+		http.MethodOptions,
+		"/links",
+		"",
+		"",
+	)
+
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("OPTIONS status = %d, want %d", response.Code, http.StatusNoContent)
+	}
+	if origin := response.Header().Get("Access-Control-Allow-Origin"); origin != "*" {
+		t.Fatalf("Access-Control-Allow-Origin = %q, want %q", origin, "*")
+	}
+	if methods := response.Header().Get("Access-Control-Allow-Methods"); methods != "GET, POST, OPTIONS" {
+		t.Fatalf("Access-Control-Allow-Methods = %q, want %q", methods, "GET, POST, OPTIONS")
+	}
+}
+
 func newTestHandler(repo repository.LinkRepository, generator service.CodeGenerator) *Handler {
 	shortener := service.NewShortenerService(repo, generator)
 	return NewHandler(shortener, testBaseURL+"/", discardLogger())
