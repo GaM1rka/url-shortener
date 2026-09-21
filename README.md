@@ -41,7 +41,7 @@ curl -X POST http://localhost:8081/links \
 Получить исходный URL:
 
 ```bash
-curl http://localhost:8081/Ab3_dE9xY0
+curl http://localhost:8081/{short_code} # нужно вставить short_code, который получили после вызова POST /links.
 ```
 
 OpenAPI-описание находится в `api/openapi.yaml`. Swagger UI запускается командой `make swagger-up` и открывается по адресу `http://localhost:8080`.
